@@ -25,6 +25,8 @@ class ProfileViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated]
     queryset = User.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['username', 'email', 'first_name', 'last_name']
 
     @action(detail=False, methods=['get'])
     def me(self, request):
@@ -35,7 +37,17 @@ class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
     permission_classes = [IsAuthenticated]
 
+    # def get_queryset(self):
+    #     user = self.request.user
+    #     return Company.objects.filter(
+    #         Q(owner=user) |
+    #         Q(teams__memberships__user=user)
+    #     ).distinct()
     def get_queryset(self):
+        # FIX for Swagger Anonymous User
+        if getattr(self, 'swagger_fake_view', False):
+            return Company.objects.none()
+
         user = self.request.user
         return Company.objects.filter(
             Q(owner=user) |
@@ -49,13 +61,28 @@ class TeamViewSet(viewsets.ModelViewSet):
     serializer_class = TeamSerializer
     permission_classes = [IsAuthenticated]
 
+    # def get_queryset(self):
+    #     company_id = self.request.query_params.get('company')
+    #     qs = Team.objects.all()
+    #     if company_id:
+    #         qs = qs.filter(company_id=company_id)
+    #     qs = qs.filter(Q(company__owner=self.request.user) | Q(memberships__user=self.request.user)).distinct()
+    #     return qs
     def get_queryset(self):
+        # FIX for Swagger Anonymous User
+        if getattr(self, 'swagger_fake_view', False):
+            return Team.objects.none()
+
         company_id = self.request.query_params.get('company')
         qs = Team.objects.all()
+
         if company_id:
             qs = qs.filter(company_id=company_id)
-        qs = qs.filter(Q(company__owner=self.request.user) | Q(memberships__user=self.request.user)).distinct()
-        return qs
+
+        return qs.filter(
+            Q(company__owner=self.request.user) |
+            Q(memberships__user=self.request.user)
+        ).distinct()
 
     def perform_create(self, serializer):
         team = serializer.save()
@@ -114,7 +141,14 @@ class TaskViewSet(viewsets.ModelViewSet):
     ordering_fields = ['due_date', 'created_at']
     filter_backends = (filters.SearchFilter, filters.OrderingFilter,)
 
+    # def get_queryset(self):
+    #     qs = Task.objects.filter(is_deleted=False)
+    #     return qs.filter(team__memberships__user=self.request.user).distinct()
     def get_queryset(self):
+        # FIX for Swagger Anonymous User
+        if getattr(self, 'swagger_fake_view', False):
+            return Task.objects.none()
+
         qs = Task.objects.filter(is_deleted=False)
         return qs.filter(team__memberships__user=self.request.user).distinct()
 
