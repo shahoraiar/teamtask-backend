@@ -141,11 +141,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     ordering_fields = ['due_date', 'created_at']
     filter_backends = (filters.SearchFilter, filters.OrderingFilter,)
 
-    # def get_queryset(self):
-    #     qs = Task.objects.filter(is_deleted=False)
-    #     return qs.filter(team__memberships__user=self.request.user).distinct()
     def get_queryset(self):
-        # FIX for Swagger Anonymous User
         if getattr(self, 'swagger_fake_view', False):
             return Task.objects.none()
 
@@ -191,3 +187,19 @@ class TaskViewSet(viewsets.ModelViewSet):
         instance.assigned_to = user
         instance.save()
         return Response(TaskSerializer(instance).data)
+
+class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ActivityLogSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Task.objects.none()
+        
+        user = self.request.user
+        return ActivityLog.objects.filter(
+            task__team__memberships__user=user
+        ).order_by('-timestamp') 
+
+        
+
