@@ -37,14 +37,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
     permission_classes = [IsAuthenticated]
 
-    # def get_queryset(self):
-    #     user = self.request.user
-    #     return Company.objects.filter(
-    #         Q(owner=user) |
-    #         Q(teams__memberships__user=user)
-    #     ).distinct()
     def get_queryset(self):
-        # FIX for Swagger Anonymous User
         if getattr(self, 'swagger_fake_view', False):
             return Company.objects.none()
 
@@ -61,15 +54,7 @@ class TeamViewSet(viewsets.ModelViewSet):
     serializer_class = TeamSerializer
     permission_classes = [IsAuthenticated]
 
-    # def get_queryset(self):
-    #     company_id = self.request.query_params.get('company')
-    #     qs = Team.objects.all()
-    #     if company_id:
-    #         qs = qs.filter(company_id=company_id)
-    #     qs = qs.filter(Q(company__owner=self.request.user) | Q(memberships__user=self.request.user)).distinct()
-    #     return qs
     def get_queryset(self):
-        # FIX for Swagger Anonymous User
         if getattr(self, 'swagger_fake_view', False):
             return Team.objects.none()
 
@@ -147,6 +132,12 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         qs = Task.objects.filter(is_deleted=False)
         return qs.filter(team__memberships__user=self.request.user).distinct()
+    
+    def create(self, request, *args, **kwargs):
+        team_id = request.data.get("team")
+        if not TeamMembership.objects.filter(team_id=team_id, user=request.user, role="admin").exists():
+            return Response({"detail": "Only admins can create tasks"}, status=403)
+        return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         team = serializer.validated_data['team']
@@ -159,10 +150,14 @@ class TaskViewSet(viewsets.ModelViewSet):
             return TaskSerializer
         return TaskSerializer
 
-    def perform_destroy(self, instance):
-        if not TeamMembership.objects.filter(team=instance.team, user=self.request.user, role='admin').exists():
-            raise PermissionError("Only admins can delete")
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        if not TeamMembership.objects.filter(team=instance.team, user=request.user, role='admin').exists():
+            return Response({'detail': 'Only admins can delete tasks'}, status=403)
+
         instance.soft_delete()
+        return Response(status=204)
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()

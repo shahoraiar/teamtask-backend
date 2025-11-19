@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import User, Company, Team, TeamMembership, Task, ActivityLog
 # Register your models here.
+
 @admin.register(ActivityLog)
 class ActivityLogAdmin(admin.ModelAdmin):
     list_display = ('id', 'task', 'user', 'action', 'timestamp', 'note')
